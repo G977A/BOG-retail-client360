@@ -1,0 +1,26 @@
+# core
+numpy>=1.26,<2.2
+pandas>=2.2,<2.4
+pyarrow>=16.0
+
+# oracle
+oracledb>=2.4          # thin mode — no Instant Client install needed
+
+# spark
+pyspark>=3.5,<4.1      # requires a JDK on PATH (17 recommended)
+
+# modelling
+scikit-learn>=1.5
+scipy>=1.13
+
+# plotting (for docs and profiling, not the deliverable)
+matplotlib>=3.9
+seaborn>=0.13
+
+# config & quality
+python-dotenv>=1.0
+ruff>=0.6
+pytest>=8.0
+
+# added in stage 5:
+# scikit-uplift>=0.5

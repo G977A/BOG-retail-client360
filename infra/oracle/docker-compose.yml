@@ -1,0 +1,26 @@
+services:
+  oracle:
+    # gvenzl's image starts far faster than the official one and is the
+    # community standard for local Oracle work. Official alternative:
+    # container-registry.oracle.com/database/free:latest
+    image: gvenzl/oracle-free:slim
+    container_name: rc360-oracle
+    ports:
+      - "1521:1521"
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-change_me_locally}
+      APP_USER: rc360
+      APP_USER_PASSWORD: ${APP_USER_PASSWORD:-change_me_locally}
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+      # every .sql here runs once, on first startup only
+      - ./init:/container-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+      start_period: 90s
+
+volumes:
+  oracle-data:

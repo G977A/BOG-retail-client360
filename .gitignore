@@ -1,0 +1,45 @@
+# --- data: never commit generated or extracted data ---
+data/
+*.csv
+*.parquet
+*.orc
+*.avro
+!docs/**/*.csv
+
+# --- secrets ---
+.env
+*.env
+!.env.example
+credentials.json
+wallet/
+
+# --- python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# --- spark ---
+spark-warehouse/
+metastore_db/
+derby.log
+_SUCCESS
+.crc
+
+# --- power bi ---
+# Commit the .pbit template (structure, no data). Keep .pbix out — it embeds data
+# and bloats the repo. Use Git LFS if you really need to version it.
+*.pbix
+*.pbix.bak
+
+# --- os / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
