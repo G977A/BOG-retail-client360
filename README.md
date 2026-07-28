@@ -22,8 +22,8 @@ truth, and how much of that gap a proper control group and uplift model recover.
 
 | Stage | Status |
 | --- | --- |
-| 1. Data model & generator | 🚧 in progress |
-| 2. Oracle warehouse & SQL layer | ⬜ not started |
+| 1. Data model & generator | ✅ Finished |
+| 2. Oracle warehouse & SQL layer | 🚧 in progress |
 | 3. PySpark feature pipeline | ⬜ not started |
 | 4. Segmentation | ⬜ not started |
 | 5. Campaign design & uplift | ⬜ not started |
