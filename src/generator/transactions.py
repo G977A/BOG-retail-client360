@@ -48,6 +48,10 @@ CATEGORY_AMOUNT_MULTIPLIER = {
 # Right-skew of transaction amounts (lognormal sigma). Real spending is
 # many-small / few-large, never symmetric around the mean.
 AMOUNT_LOGNORMAL_SIGMA = 0.65
+# A lognormal's mean sits exp(sigma^2/2) above its median. Divide the target
+# by this before taking logs so avg_txn_amount_gel means the actual MEAN
+# ticket, not the median — otherwise every amount runs ~23% hot.
+_AMOUNT_MEAN_FACTOR = float(np.exp(AMOUNT_LOGNORMAL_SIGMA ** 2 / 2))
 
 # Which channels a category is plausibly bought through. Blended with the
 # customer's own persona channel preference, so a digital persona buying
@@ -70,8 +74,21 @@ CATEGORY_CHANNEL_AFFINITY = {
 PAYDAY_CLUSTER_SHARE = 0.35
 PAYDAY_DECAY = 0.35              # geometric decay away from payday
 
-# Cash withdrawals: fraction of monthly inflow per withdrawal, rounded.
-CASH_WITHDRAWAL_INFLOW_FRACTION = 0.18
+# Share of monthly inflow that gets spent; the remainder accumulates as
+# balance. Spending is bounded by income — without this, generated outflow
+# exceeds inflow and every balance drains to the overdraft floor.
+SPEND_RATIO = {
+    "student_young_digital": 0.92,
+    "mass_retail_family": 0.88,
+    "solo_affluent": 0.72,
+    "cash_traditionalist": 0.88,
+    "pensioner": 0.90,
+    "remittance_household": 0.90,
+}
+
+# Cash withdrawals absorb whatever the spending budget leaves after card
+# purchases: a cash-preferring customer has low card spend and high ATM
+# withdrawals because their spending happens off the card rails.
 CASH_WITHDRAWAL_SIGMA = 0.45
 CASH_ROUNDING_GEL = 10
 CASH_MIN_GEL = 20.0
@@ -147,7 +164,14 @@ def _build_prob_tensors():
     chan_cum = np.cumsum(chan, axis=2)
 
     atm_share = np.array([config.PERSONAS[p]["channel_shares"]["atm"] for p in personas])
-    return cat_cum, chan_cum, atm_share, personas
+
+    # E[category multiplier] per persona — needed to predict a customer's
+    # monthly card spend before any transaction is drawn.
+    exp_mult = np.array([
+        sum(config.PERSONAS[p]["spend_shares"][c] * CATEGORY_AMOUNT_MULTIPLIER[c] for c in cats)
+        for p in personas
+    ])
+    return cat_cum, chan_cum, atm_share, exp_mult, personas
 
 
 def _draw_from_cum(rng, cum_rows: np.ndarray) -> np.ndarray:
@@ -162,7 +186,7 @@ def build_transactions_chunk(master_chunk: pd.DataFrame, rng,
                              start_month: pd.Timestamp,
                              n_months: int = config.N_MONTHS) -> pd.DataFrame:
     """Generate all transactions for one batch of customers."""
-    cat_cum, chan_cum, atm_share, personas = _build_prob_tensors()
+    cat_cum, chan_cum, atm_share, exp_mult, personas = _build_prob_tensors()
     persona_pos = {p: i for i, p in enumerate(personas)}
     cats = np.array(config.MCC_CATEGORIES, dtype=object)
     offsets = _category_offsets()
@@ -178,6 +202,26 @@ def build_transactions_chunk(master_chunk: pd.DataFrame, rng,
     regularity = master_chunk["salary_regularity"].to_numpy()
 
     payday = rng.integers(1, 11, size=n_cust)          # each customer's usual inflow day
+
+    # ---------------------------- budget calibration (income bounds spending)
+    # Predict each customer's monthly card spend from config, compare it with
+    # what their income allows, and split the remainder into cash. If configured
+    # card spend alone exceeds the budget, purchases are scaled down and the
+    # shortfall is reported — that is a signal the config numbers for that
+    # persona are internally inconsistent, not something to hide.
+    spend_ratio = np.array([SPEND_RATIO[p] for p in personas])[p_idx]
+    # Expected income, not headline income: salary_regularity is the probability
+    # the credit lands in a given month, so a customer with irregular income
+    # (student, remittance household) must budget against the lower average or
+    # they overspend every month and drain to the overdraft floor.
+    budget = inflow * regularity * spend_ratio
+    n_purch_exp = tpm * (1.0 - atm_share[p_idx])
+    n_cash_exp = np.maximum(tpm * atm_share[p_idx], 1e-9)
+    card_spend_exp = n_purch_exp * avg_amt * exp_mult[p_idx]
+
+    purchase_scale = np.minimum(1.0, budget / np.maximum(card_spend_exp, 1e-9))
+    cash_budget = np.maximum(budget - card_spend_exp * purchase_scale, 0.0)
+    cash_per_withdrawal = cash_budget / n_cash_exp
 
     months = [start_month + pd.DateOffset(months=m) for m in range(n_months)]
     frames = []
@@ -200,8 +244,10 @@ def build_transactions_chunk(master_chunk: pd.DataFrame, rng,
             ci = _draw_from_cum(rng, cat_cum[rp])
             chi = _draw_from_cum(rng, chan_cum[rp, ci])
 
-            median = avg_amt[rep] * cat_mult[ci]
-            amount = rng.lognormal(np.log(median), AMOUNT_LOGNORMAL_SIGMA)
+            target_mean = avg_amt[rep] * cat_mult[ci] * purchase_scale[rep]
+            amount = rng.lognormal(
+                np.log(np.maximum(target_mean, 0.5) / _AMOUNT_MEAN_FACTOR),
+                AMOUNT_LOGNORMAL_SIGMA)
 
             day = rng.integers(1, dim + 1, size=n)
             boost = rng.random(n) < PAYDAY_CLUSTER_SHARE
@@ -226,8 +272,10 @@ def build_transactions_chunk(master_chunk: pd.DataFrame, rng,
         if n_cash.sum() > 0:
             rep = np.repeat(np.arange(n_cust), n_cash)
             n = len(rep)
-            base = np.maximum(inflow[rep] * CASH_WITHDRAWAL_INFLOW_FRACTION, CASH_MIN_GEL)
-            amt = rng.lognormal(np.log(base), CASH_WITHDRAWAL_SIGMA)
+            base = np.maximum(cash_per_withdrawal[rep], CASH_MIN_GEL)
+            amt = rng.lognormal(
+                np.log(base / float(np.exp(CASH_WITHDRAWAL_SIGMA ** 2 / 2))),
+                CASH_WITHDRAWAL_SIGMA)
             amt = np.maximum(np.round(amt / CASH_ROUNDING_GEL) * CASH_ROUNDING_GEL, CASH_MIN_GEL)
 
             day = rng.integers(1, dim + 1, size=n)
@@ -301,6 +349,35 @@ def generate_transactions(master: pd.DataFrame, rng, out_dir: str | Path,
             "path": str(out)}
 
 
+def spend_calibration(master: pd.DataFrame) -> pd.DataFrame:
+    """Per-persona view of configured card spend vs what income allows.
+
+    scale < 1 means the persona's configured txns_per_month x
+    avg_txn_amount_gel implies more card spend than SPEND_RATIO of their income
+    permits, so purchases are scaled down. Treat a scale well below 1 as a
+    prompt to revisit that persona's numbers in config.py.
+    """
+    _, _, atm_share, exp_mult, personas = _build_prob_tensors()
+    pos = {p: i for i, p in enumerate(personas)}
+    pi = master["persona"].map(pos).to_numpy()
+
+    tpm = master["txns_per_month"].to_numpy()
+    avg_amt = master["avg_txn_amount_gel"].to_numpy()
+    inflow = master["monthly_inflow_gel"].to_numpy()
+
+    regularity = master["salary_regularity"].to_numpy()
+    budget = inflow * regularity * np.array([SPEND_RATIO[p] for p in personas])[pi]
+    card = tpm * (1 - atm_share[pi]) * avg_amt * exp_mult[pi]
+    scale = np.minimum(1.0, budget / np.maximum(card, 1e-9))
+    cash = np.maximum(budget - card * scale, 0.0)
+
+    return (pd.DataFrame({
+        "persona": master["persona"].to_numpy(),
+        "inflow": inflow, "exp_income": inflow * regularity, "budget": budget,
+        "card_spend": card * scale, "cash_spend": cash, "scale": scale,
+    }).groupby("persona").mean().round(2))
+
+
 # ------------------------------------------------------------------ demo
 if __name__ == "__main__":
     # module name differs if you saved layer 1 as customer.py rather than customers.py
@@ -317,6 +394,9 @@ if __name__ == "__main__":
     txns = build_transactions_chunk(master, rng, pd.Timestamp("2025-01-01"))
     print(f"\n{len(txns):,} transactions for {len(master):,} customers "
           f"({len(txns)/len(master):.0f} per customer over {config.N_MONTHS} months)\n")
+
+    print("spend calibration (card + cash ~= budget; scale 1.0 = config fits income):")
+    print(spend_calibration(master).to_string(), "\n")
 
     print("event mix:")
     print(txns["txn_type"].value_counts(normalize=True).round(3).to_string(), "\n")
