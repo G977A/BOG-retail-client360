@@ -18,6 +18,8 @@ persona and a known true uplift for every synthetic customer, so the correct ans
 is known in advance. The analysis then shows how far the naive read drifts from the
 truth, and how much of that gap a proper control group and uplift model recover.
 
++ It is for study purposes, as I strongly believe hands-on practice is the best method for studying :)
+
 ## Status
 
 | Stage | Status |
@@ -30,10 +32,6 @@ truth, and how much of that gap a proper control group and uplift model recover.
 | 6. Power BI & executive summary | ⬜ not started |
 
 ## Headline result
-
-<!-- Fill this in at the end. One sentence, one number. Example shape:
-Targeting the top 3 uplift deciles instead of the top 3 propensity deciles produces
-~X incremental revenue on the same budget — a Y% improvement in campaign ROI. -->
 
 _TBD_
 
@@ -52,7 +50,7 @@ generator ──▶ Oracle 23ai (star schema) ──▶ PySpark feature store �
 
 | Path | Contents |
 | --- | --- |
-| `docs/` | Charter, data model, decision log — read `docs/00-charter.md` first |
+| `docs/` | Charter, data model, decision log - read `docs/00-charter.md` first |
 | `infra/oracle/` | Docker Compose for a local Oracle Database Free instance |
 | `sql/ddl/` | Schema definition: dimensions, facts, partitioning, indexes |
 | `sql/analytics/` | Analytical SQL — cohorts, RFM, product penetration |

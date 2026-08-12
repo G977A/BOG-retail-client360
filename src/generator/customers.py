@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 from . import config
-from .sampling import make_rng, truncated_normal, weighted_choice, standardize
+from .sampling import make_rng, standardize, truncated_normal, weighted_choice
 
 # ---- geography & occupation: local for now; promote to config if it grows ----
 CITIES = ["Tbilisi", "Batumi", "Kutaisi", "Rustavi", "Gori", "Zugdidi", "Other"]

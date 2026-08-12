@@ -35,16 +35,19 @@ import json
 import time
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from . import config
+from .accounts import (
+    aggregate_monthly_flows,
+    assign_holdings,
+    build_account_monthly,
+    build_date_dim,
+    build_products,
+)
+from .campaign import build_campaign_dim, build_campaign_response
 from .sampling import make_rng
 from .transactions import build_merchants, generate_transactions
-from .accounts import (build_products, build_date_dim, assign_holdings,
-                       aggregate_monthly_flows, build_account_monthly,
-                       campaign_eligible)
-from .campaign import build_campaign_dim, build_campaign_response
 
 try:                                    # layer 1 module name varies
     from .customers import build_customers, to_dim_customer, to_gt_persona, to_gt_uplift
@@ -100,7 +103,7 @@ def verify(wh: Path, gt: Path, master: pd.DataFrame) -> list[str]:
 
     # eligibility: no customer in the campaign may already hold a credit card
     prods = pd.read_parquet(wh / "dim_product.parquet")
-    cc_sk = int(prods.loc[prods.product_name == "Credit Card", "product_sk"].iloc[0])
+    int(prods.loc[prods.product_name == "Credit Card", "product_sk"].iloc[0])
     holders = set(pd.read_parquet(wh / "fact_account_monthly.parquet",
                                   columns=["customer_sk", "product_sk"])
                   .query("product_sk == @cc_sk").customer_sk)

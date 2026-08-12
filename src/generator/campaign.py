@@ -185,8 +185,8 @@ if __name__ == "__main__":
         from .customers import build_customers
     except ImportError:
         from .customers import build_customers
+    from .accounts import assign_holdings, build_products
     from .sampling import make_rng
-    from .accounts import build_products, assign_holdings
 
     config.validate_config()
     rng = make_rng(config.RANDOM_SEED)

@@ -34,4 +34,4 @@ no credentials for.
   noise, and realistic seasonality to be a fair test.
 - "You made up the data" is a legitimate critique. The answer is that the
   *method* is what's being demonstrated, and the method is only checkable
-  because the data is synthetic. Be ready to say this out loud.
+  because the data is synthetic.
