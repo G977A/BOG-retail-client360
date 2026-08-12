@@ -49,7 +49,7 @@ from .campaign import build_campaign_dim, build_campaign_response
 try:                                    # layer 1 module name varies
     from .customers import build_customers, to_dim_customer, to_gt_persona, to_gt_uplift
 except ImportError:                     # pragma: no cover
-    from .customer import build_customers, to_dim_customer, to_gt_persona, to_gt_uplift
+    from .customers import build_customers, to_dim_customer, to_gt_persona, to_gt_uplift
 
 
 def config_fingerprint() -> str:

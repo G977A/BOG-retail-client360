@@ -384,7 +384,7 @@ if __name__ == "__main__":
     try:
         from .customers import build_customers
     except ImportError:
-        from .customer import build_customers
+        from .customers import build_customers
     from .sampling import make_rng
 
     config.validate_config()

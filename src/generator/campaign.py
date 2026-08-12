@@ -184,7 +184,7 @@ if __name__ == "__main__":
     try:
         from .customers import build_customers
     except ImportError:
-        from .customer import build_customers
+        from .customers import build_customers
     from .sampling import make_rng
     from .accounts import build_products, assign_holdings
 
